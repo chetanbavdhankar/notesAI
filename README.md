@@ -2,6 +2,15 @@
 
 A local-first Windows desktop app for saving context and asking questions with source-linked answers. Built with Tauri v2, Rust, React, TypeScript, Vite, and Tailwind CSS.
 
+## Download for Windows
+
+Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
+
+- `NotesAI_0.3.0_x64-setup.exe` — recommended Windows installer
+- `notesai.exe` — standalone application executable
+
+The repository tracks all application source code, tests, configuration, lockfiles, icons, and third-party license notices. Generated dependency folders, caches, test screenshots, and compiler output are excluded; they are reproducible from the tracked source and lockfiles.
+
 ## Run
 
 Build the Windows installer from this checkout:
