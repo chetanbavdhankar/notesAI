@@ -2,6 +2,8 @@
 
 A local-first Windows desktop app for saving context and asking questions with source-linked answers. Built with Tauri v2, Rust, React, TypeScript, Vite, and Tailwind CSS.
 
+Planning to build on a MacBook? Follow the repository-specific [macOS port plan](docs/MACOS_PORT_PLAN.md). It starts with an Apple Silicon dependency and unsigned-app gate, then covers menu-bar capture, Keychain, cross-platform backups, signing, notarization, and release automation.
+
 ## Download for Windows
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
