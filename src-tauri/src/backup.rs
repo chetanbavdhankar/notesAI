@@ -60,6 +60,10 @@ pub struct Record {
     pub kind: String,
     pub tags: Vec<String>,
     pub created_at: String,
+    #[serde(default)]
+    pub topics: Vec<String>,
+    #[serde(default)]
+    pub organized: bool,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Snapshot {
@@ -92,6 +96,8 @@ pub fn records(path: &Path) -> Result<Vec<Record>> {
             kind: n.kind,
             tags: n.tags,
             created_at: n.created_at,
+            topics: n.topics,
+            organized: n.organized,
         })
         .collect::<Vec<_>>();
     notes.sort_by(|a, b| a.id.cmp(&b.id));
@@ -119,7 +125,7 @@ pub fn decode(bytes: &[u8]) -> Result<Snapshot> {
     );
     let snapshot: Snapshot = serde_json::from_slice(&json)?;
     anyhow::ensure!(
-        snapshot.format == "notesai.snapshot" && snapshot.schema_version == 1,
+        snapshot.format == "notesai.snapshot" && (1..=2).contains(&snapshot.schema_version),
         "Unsupported NotesAI backup version"
     );
     anyhow::ensure!(
@@ -127,6 +133,7 @@ pub fn decode(bytes: &[u8]) -> Result<Snapshot> {
         "Too many records in backup"
     );
     for note in &snapshot.notes {
+        crate::organize::clean(note.topics.clone())?;
         uuid::Uuid::parse_str(&note.id)?;
         anyhow::ensure!(
             !note.body.trim().is_empty() && note.body.len() <= 5_000_000,
@@ -163,7 +170,16 @@ pub fn restore(db_path: &Path, bytes: &[u8]) -> Result<Restored> {
         let mut id = n.id;
         let mut title = n.title;
         if let Some((t, b, g, u, k)) = existing {
-            if t == title && b == n.body && g == tags && u == n.source_url && k == n.kind {
+            let existing_topics: Option<(String,bool)>=tx.query_row("SELECT topics,reviewed_revision=(SELECT revision FROM notes WHERE id=?) FROM note_topics WHERE note_id=?",[&id,&id],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+            let (existing_topics, organized) = existing_topics.unwrap_or(("[]".into(), false));
+            if t == title
+                && b == n.body
+                && g == tags
+                && u == n.source_url
+                && k == n.kind
+                && existing_topics == serde_json::to_string(&n.topics)?
+                && organized == n.organized
+            {
                 result.skipped += 1;
                 continue;
             }
@@ -177,6 +193,9 @@ pub fn restore(db_path: &Path, bytes: &[u8]) -> Result<Restored> {
             "indexing"
         };
         tx.execute("INSERT INTO notes(id,title,body,source_url,kind,tags,created_at,status) VALUES(?,?,?,?,?,?,?,?)",rusqlite::params![id,title,n.body,n.source_url,n.kind,tags,n.created_at,status])?;
+        if n.organized || !n.topics.is_empty() {
+            tx.execute("INSERT INTO note_topics(note_id,topics,reviewed_revision,reviewed_at) VALUES(?,?,?,?)",rusqlite::params![id,serde_json::to_string(&n.topics)?,if n.organized{0}else{-1},chrono::Utc::now().to_rfc3339()])?;
+        }
         result.imported += 1;
     }
     tx.commit()?;
@@ -285,7 +304,7 @@ impl Service {
         }
         let snapshot = Snapshot {
             format: "notesai.snapshot".into(),
-            schema_version: 1,
+            schema_version: 2,
             device_id: state.device_id.clone(),
             captured_at: chrono::Utc::now().to_rfc3339(),
             notes,
@@ -382,6 +401,7 @@ mod tests {
             vec!["work".into()],
         )?;
         let service = Service::new(d.path().into(), source.clone())?;
+        crate::organize::apply(&source, &id, 0, vec!["Research".into()])?;
         service.backup(&Config::default(), false).await?;
         let bytes = std::fs::read(d.path().join("backups/latest.notesai.json.gz"))?;
         assert!(bytes.len() < 1500);
@@ -393,6 +413,8 @@ mod tests {
         let target = d.path().join("two.db");
         db::init(&target)?;
         assert_eq!(restore(&target, &bytes)?.imported, 1);
+        assert_eq!(db::get(&target, &id)?.topics, vec!["Research"]);
+        assert!(db::get(&target, &id)?.organized);
         assert_eq!(restore(&target, &bytes)?.skipped, 1);
         db::edit(&target, &id, "Newer local text", "Do not overwrite", vec![])?;
         assert_eq!(restore(&target, &bytes)?.conflicts, 1);

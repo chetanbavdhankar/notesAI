@@ -207,6 +207,8 @@ export function Markdown({
   );
 }
 
+import { BackgroundSettings } from "./Organization";
+
 export function SettingsDialog({
   initial,
 
@@ -366,7 +368,14 @@ export function SettingsDialog({
       <p className="modal-subtitle">Your models. Your context. Your choice.</p>
 
       <nav className="settings-tabs" aria-label="Settings sections">
-        {["Models", "Appearance", "Retrieval", "Backup"].map((name) => (
+        {[
+          "General",
+          "Models",
+          "Organization",
+          "Appearance",
+          "Retrieval",
+          "Backup",
+        ].map((name) => (
           <button
             key={name}
             aria-pressed={section === name}
@@ -377,6 +386,36 @@ export function SettingsDialog({
         ))}
       </nav>
 
+      {section === "General" && <BackgroundSettings />}
+      {section === "Organization" && (
+        <section className="background-settings">
+          <h3>Topic organization</h3>
+          <label>
+            Organizer model
+            <select
+              value={settings.organizer_profile_id ?? ""}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  organizer_profile_id: e.target.value,
+                }))
+              }
+            >
+              <option value="">Use active chat profile</option>
+              {settings.profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.model_name || "No model selected"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            Organize proposes topics for new or edited notes. You review every
+            assignment before it is saved. Selecting a topic in the sidebar also
+            limits retrieval and chat to that topic.
+          </p>
+        </section>
+      )}
       {section === "Appearance" && (
         <section className="appearance-settings" aria-label="Appearance">
           <div className="appearance-heading">
@@ -782,6 +821,10 @@ export function SettingsDialog({
                       ...s,
 
                       profiles: rest,
+                      organizer_profile_id:
+                        s.organizer_profile_id === selected
+                          ? ""
+                          : s.organizer_profile_id,
 
                       active_profile_id:
                         s.active_profile_id === selected

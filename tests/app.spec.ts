@@ -1,4 +1,38 @@
 import { expect, test } from "@playwright/test";
+test("topics require review, filter notes, persist, and reopen after editing", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit topics", exact: true }).click();
+  const title = await page.locator(".organization-card h3").innerText();
+  await page
+    .locator(".organization-card input:not([type=checkbox])")
+    .fill("Research, Personal knowledge");
+  await page.getByRole("button", { name: "Save topics", exact: true }).click();
+  await expect(page.getByText("Topics saved ✓")).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .locator(".topic-nav")
+    .getByRole("button", { name: /Research/ })
+    .click();
+  await expect(page.locator(".note-card")).toHaveCount(1);
+  await page.reload();
+  await page
+    .locator(".topic-nav")
+    .getByRole("button", { name: /Research/ })
+    .click();
+  await expect(page.locator(".note-card")).toContainText(title);
+  await page.getByRole("button", { name: "Edit note", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Markdown", exact: true })
+    .fill("Changed subject");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await expect(
+    page.locator(".organization-card").filter({ hasText: title }),
+  ).toContainText("Changed subject");
+  await page.screenshot({ path: "artifacts/topic-review.png" });
+});
 test("capture, edit, filter, reload, and delete persist correctly", async ({
   page,
 }) => {

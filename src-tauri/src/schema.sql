@@ -16,4 +16,9 @@ CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
  INSERT INTO chunks_fts(chunks_fts,rowid,text) VALUES('delete',old.id,old.text);
 END;
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(embedding float[384] distance_metric=cosine);
-PRAGMA user_version=1;
+CREATE TABLE IF NOT EXISTS note_topics (
+ note_id TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+ topics TEXT NOT NULL DEFAULT '[]', reviewed_revision INTEGER NOT NULL,
+ reviewed_at TEXT NOT NULL
+);
+PRAGMA user_version=2;

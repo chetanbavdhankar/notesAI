@@ -14,6 +14,12 @@ pub struct Note {
     pub created_at: String,
     pub status: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub topics: Vec<String>,
+    #[serde(default)]
+    pub organized: bool,
+    #[serde(default)]
+    pub revision: i64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hit {
@@ -52,11 +58,14 @@ fn read_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
         created_at: row.get(6)?,
         status: row.get(7)?,
         error: row.get(8)?,
+        topics: serde_json::from_str(&row.get::<_, String>(9)?).unwrap_or_default(),
+        organized: row.get(10)?,
+        revision: row.get(11)?,
     })
 }
 pub fn list(path: &Path) -> Result<Vec<Note>> {
     let db = open(path)?;
-    let mut stmt=db.prepare("SELECT id,title,body,source_url,kind,tags,created_at,status,error FROM notes ORDER BY created_at DESC")?;
+    let mut stmt=db.prepare("SELECT n.id,title,body,source_url,kind,tags,created_at,status,error,COALESCE(t.topics,'[]'),COALESCE(t.reviewed_revision=n.revision,0),n.revision FROM notes n LEFT JOIN note_topics t ON t.note_id=n.id ORDER BY created_at DESC")?;
     let notes = stmt
         .query_map([], read_note)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -64,7 +73,7 @@ pub fn list(path: &Path) -> Result<Vec<Note>> {
 }
 pub fn get(path: &Path, id: &str) -> Result<Note> {
     Ok(open(path)?.query_row(
-        "SELECT id,title,body,source_url,kind,tags,created_at,status,error FROM notes WHERE id=?",
+        "SELECT n.id,title,body,source_url,kind,tags,created_at,status,error,COALESCE(t.topics,'[]'),COALESCE(t.reviewed_revision=n.revision,0),n.revision FROM notes n LEFT JOIN note_topics t ON t.note_id=n.id WHERE n.id=?",
         [id],
         read_note,
     )?)
@@ -152,6 +161,31 @@ pub fn vector(path: &Path, embedding: &[f32], k: usize) -> Result<Vec<i64>> {
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
+pub fn scoped_lexical(path: &Path, query: &str, k: usize, topic: &str) -> Result<Vec<i64>> {
+    let terms = query
+        .split_whitespace()
+        .take(64)
+        .map(|t| format!("\"{}\"", t.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    if terms.is_empty() {
+        return Ok(vec![]);
+    }
+    let db = open(path)?;
+    let mut stmt=db.prepare("SELECT f.rowid FROM chunks_fts f JOIN chunks c ON c.id=f.rowid WHERE chunks_fts MATCH ? AND EXISTS(SELECT 1 FROM note_topics t,json_each(t.topics) j WHERE t.note_id=c.note_id AND j.value=?) ORDER BY bm25(chunks_fts),f.rowid LIMIT ?")?;
+    let rows = stmt
+        .query_map(params![terms, topic, k as i64], |r| r.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+pub fn scoped_vector(path: &Path, embedding: &[f32], k: usize, topic: &str) -> Result<Vec<i64>> {
+    let db = open(path)?;
+    let mut stmt=db.prepare("SELECT v.rowid FROM chunk_vectors v JOIN chunks c ON c.id=v.rowid WHERE EXISTS(SELECT 1 FROM note_topics t,json_each(t.topics) j WHERE t.note_id=c.note_id AND j.value=?) ORDER BY vec_distance_cosine(v.embedding,?),v.rowid LIMIT ?")?;
+    let rows = stmt
+        .query_map(params![topic, bytes(embedding), k as i64], |r| r.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
 pub fn rrf(lists: &[Vec<i64>], k: usize) -> Vec<(i64, f64)> {
     let mut scores = HashMap::<i64, f64>::new();
     for list in lists {
@@ -198,6 +232,11 @@ mod tests {
         )?;
         assert_eq!(lexical(&path, "unique", 5)?, vec![row]);
         assert_eq!(vector(&path, &emb, 5)?, vec![row]);
+        crate::organize::apply(&path, &id, 0, vec!["Science".into()])?;
+        assert_eq!(scoped_lexical(&path, "unique", 5, "Science")?, vec![row]);
+        assert_eq!(scoped_vector(&path, &emb, 5, "Science")?, vec![row]);
+        assert!(scoped_lexical(&path, "unique", 5, "Travel")?.is_empty());
+        assert!(scoped_vector(&path, &emb, 5, "Travel")?.is_empty());
         assert!(lexical(&path, "\" OR *", 5).is_ok());
         remove(&path, &id)?;
         assert!(lexical(&path, "unique", 5)?.is_empty());

@@ -13,6 +13,24 @@ const server = createServer(async (req, res) => {
   }
   if (req.url === "/v1/chat/completions") {
     const data = JSON.parse(body);
+    if (data.stream === false) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      const content = data.messages[0].content.includes(
+        "Classify one saved note",
+      )
+        ? JSON.stringify({
+            topics: ["Physics", "Astronomy"],
+            reason:
+              "Orbital dynamics concerns physics; astronomy is an alternative.",
+          })
+        : "Angular momentum is conserved. [^1]";
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content }, finish_reason: "stop" }],
+        }),
+      );
+      return;
+    }
     if (!data.messages[0].content.includes("angular momentum")) {
       res.writeHead(400);
       res.end("Missing retrieved context");
@@ -20,7 +38,7 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     for (const content of [
-      "Planets orbit because of gravity. ",
+      "Planets orbit because of gravity.\n\n",
       "Angular momentum is conserved. [^1]",
     ])
       res.write(
@@ -40,7 +58,7 @@ const app = spawn(
   resolve(
     process.env.NOTESAI_SMOKE_EXE || "src-tauri/target/debug/notesai.exe",
   ),
-  [],
+  ["--background"],
   {
     env: {
       ...process.env,
@@ -76,6 +94,36 @@ try {
   }
   if (!page) throw new Error("Native frontend did not load");
   const { expect } = await import("@playwright/test");
+  const visible = await page.evaluate(() =>
+    window.__TAURI_INTERNALS__.invoke("plugin:window|is_visible", {
+      label: "main",
+    }),
+  );
+  expect(visible).toBe(false);
+  const reopen = spawn(
+    resolve(
+      process.env.NOTESAI_SMOKE_EXE || "src-tauri/target/debug/notesai.exe",
+    ),
+    [],
+    {
+      env: { ...process.env, NOTESAI_DATA_DIR: resolve(".tools/native-smoke") },
+      windowsHide: true,
+    },
+  );
+  await new Promise((r, reject) => {
+    reopen.on("exit", r);
+    reopen.on("error", reject);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__TAURI_INTERNALS__.invoke("plugin:window|is_visible", {
+          label: "main",
+        }),
+      ),
+    )
+    .toBe(true);
+  console.log("PASS: --background starts with the main window hidden.");
   await page
     .getByRole("button", { name: "New capture Ctrl N", exact: true })
     .click();
@@ -85,6 +133,17 @@ try {
       "Native orbital mechanics\n\nPlanets orbit a star because of gravity. Orbital angular momentum is conserved.",
     );
   await page.getByRole("button", { name: "Save capture", exact: true }).click();
+  await expect
+    .poll(
+      async () => {
+        const notes = await page.evaluate(() =>
+          window.__TAURI_INTERNALS__.invoke("list_notes"),
+        );
+        return notes[0]?.status;
+      },
+      { timeout: 180000 },
+    )
+    .toBe("ready");
   await expect(page.locator(".detail-footer")).toContainText(
     "Indexed and ready",
     { timeout: 120000 },
@@ -147,6 +206,26 @@ try {
   await page
     .getByRole("button", { name: "Save settings", exact: true })
     .click();
+  await page.getByRole("button", { name: "Edit topics", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Suggest topics for remaining notes" })
+    .click();
+  await expect(page.locator(".organization-card")).toContainText(
+    "Orbital dynamics concerns physics",
+    { timeout: 30000 },
+  );
+  await expect(page.getByLabel("Physics", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Astronomy", { exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "Save topics", exact: true }).click();
+  await expect(page.getByText("Topics saved ✓")).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .locator(".topic-nav")
+    .getByRole("button", { name: /Physics/ })
+    .click();
+  console.log(
+    "PASS: Native organizer proposes alternatives; review saves the selected topic.",
+  );
   await page
     .getByRole("button", { name: "Ask your library", exact: true })
     .click();
@@ -158,7 +237,16 @@ try {
     "Angular momentum is conserved.",
     { timeout: 30000 },
   );
+  await expect(page.getByRole("button", { name: "Send question" })).toBeVisible(
+    { timeout: 30000 },
+  );
+  await expect(page.locator(".assistant .markdown")).not.toContainText(
+    "Planets orbit because of gravity.",
+  );
   await expect(page.locator(".citation")).toHaveCount(1);
+  console.log(
+    "PASS: Uncited paragraph triggers repair and is replaced by a fully cited answer.",
+  );
   const userBox = await page.locator(".chat-message.user").last().boundingBox();
   const assistantBox = await page
     .locator(".chat-message.assistant")
@@ -208,6 +296,17 @@ try {
     await page.screenshot({ path: "artifacts/ollama-chat.png" });
     console.log(
       "PASS: Real qwen3.5:0.8b answered from indexed notes with a clickable citation and no stream error.",
+    );
+    const suggestion = await page.evaluate(async () => {
+      const notes = await window.__TAURI_INTERNALS__.invoke("list_notes");
+      return window.__TAURI_INTERNALS__.invoke("suggest_topics", {
+        id: notes[0].id,
+      });
+    });
+    expect(suggestion.topics.length).toBeGreaterThan(0);
+    expect(suggestion.reason.length).toBeGreaterThan(0);
+    console.log(
+      "PASS: Real Ollama organizer returned structured topic suggestions.",
     );
   }
   console.log(

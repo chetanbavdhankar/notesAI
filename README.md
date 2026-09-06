@@ -6,7 +6,7 @@ A local-first Windows desktop app for saving context and asking questions with s
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
 
-- `NotesAI_0.3.3_x64-setup.exe` — recommended Windows installer
+- `NotesAI_0.4.0_x64-setup.exe` — recommended Windows installer
 - `notesai.exe` — standalone application executable
 
 The repository tracks all application source code, tests, configuration, lockfiles, icons, and third-party license notices. Generated dependency folders, caches, test screenshots, and compiler output are excluded; they are reproducible from the tracked source and lockfiles.
@@ -20,7 +20,7 @@ npm.cmd ci
 npm.cmd run desktop:build
 ```
 
-Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.3.3_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
+Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.4.0_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
 
 ```powershell
 npm.cmd run dev             # Browser interface preview, without native AI/ingestion
@@ -41,6 +41,14 @@ The desktop/build/test launcher fetches a pinned, SHA-256-verified yt-dlp reader
 6. Ask your library a question. Click a numbered citation to open the actual passage supplied to the model, its capture date, and original URL.
 
 Closing the window leaves the app in the Windows tray so shortcuts keep working. Use **Open NotesAI** or **Quit NotesAI** in the tray menu. Startup shortcut conflicts generate a notification rather than crashing the app.
+
+### Background startup and topic organization
+
+- **Settings → General → Start NotesAI with Windows, in the tray** enables per-user login startup. The switch applies immediately and registers the current executable with `--background`; enable it from the installed app. **Run in background** hides the window immediately. Startup launches without flashing a main window; opening NotesAI again brings the existing process forward. Tray Quit stops capture until the next launch/login. No administrator privileges or Windows service are required.
+- **Organize** reviews unorganized notes using the active model, or the separate profile selected in **Settings → Organization**. Click **Suggest topics for remaining notes** to send excerpts one at a time. Only the first suggested topic is preselected; select alternatives or multiple complementary topics, edit names, and **Save topics**. No assignment is saved automatically. Unsaved notes stay unorganized; an empty selection can explicitly mark a note reviewed without a topic.
+- Topic names form the main sidebar groups. Source types remain available in a collapsible secondary section. Selecting a topic limits both keyword/vector retrieval and the next chat question; the composer displays this scope. **Edit topics** revises an existing assignment. Editing note content makes it eligible for review again, and stale review saves are rejected.
+- Topic assignments and review state are included in compact schema-v2 backups. Older schema-v1 archives remain importable. Rebuilding embeddings is unnecessary when only topics change. Organization uses bounded excerpts, so review long or mixed-subject notes carefully.
+- Citation checks cover paragraphs and list items as well as valid source numbers. An uncited answer gets one repair attempt; if that fails, linked excerpts replace it. Numbered buttons open the exact source passage and its note. These checks validate references and coverage, not the truth of an LLM's interpretation.
 
 ### Model profiles
 
@@ -93,7 +101,7 @@ flowchart LR
 - Windows contain up to 510 BGE content tokens, reserving two special tokens within the 512-token model limit. The overlap is 51 tokens. Original Unicode text slices are retained for citations.
 - BGE Small generates 384-dimensional vectors. sqlite-vec stores cosine-distance vectors; FTS5 indexes the same passages. Lexical and dense retrieval run concurrently, using separate SQLite connections, then merge through reciprocal rank fusion.
 - Captured documents are treated as untrusted source data in the system prompt. Source records contain note ID, chunk ID, title, URL, and timestamp. A conservative UTF-8 byte budget prevents overflowing the configured context window. This can include fewer passages than Top K.
-- SSE is decoded across arbitrary network boundaries, including split UTF-8. Citation IDs are validated after streaming. Missing or invalid citations display an explicit error; validation does not prove that a model's interpretation is correct.
+- SSE is decoded across arbitrary network boundaries, including split UTF-8. Citation IDs and paragraph/list coverage are validated after streaming, followed by one repair attempt and a source-excerpt fallback if necessary. Validation does not prove that a model's interpretation is correct.
 - Chat history is held for the current app session; notes and profiles persist across restarts.
 
 ## Hydration scope

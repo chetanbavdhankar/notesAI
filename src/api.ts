@@ -75,7 +75,16 @@ export const api = {
     if (desktop) return invoke("edit_note", { id, title, body, tags });
     persist(
       previewNotes().map((n) =>
-        n.id === id ? { ...n, title, body, tags } : n,
+        n.id === id
+          ? {
+              ...n,
+              title,
+              body,
+              tags,
+              organized: false,
+              revision: (n.revision ?? 0) + 1,
+            }
+          : n,
       ),
     );
   },
@@ -103,20 +112,21 @@ export const api = {
       );
     return invoke("discover_models", { profile });
   },
-  search: (query: string, top_k: number): Promise<Hit[]> => {
+  search: (query: string, top_k: number, topic = ""): Promise<Hit[]> => {
     if (!desktop)
       return Promise.reject(
         new Error(
           "Hybrid search requires the desktop app and local embeddings.",
         ),
       );
-    return invoke("search", { query, topK: top_k });
+    return invoke("search", { query, topK: top_k, topic: topic || null });
   },
   chat: async (
     question: string,
     history: Message[],
     request_id: string,
     onEvent: (event: ChatEvent) => void,
+    topic = "",
   ) => {
     if (!desktop)
       throw new Error(
@@ -129,10 +139,28 @@ export const api = {
       history: history.map(({ role, content }) => ({ role, content })),
       requestId: request_id,
       onEvent: channel,
+      topic: topic || null,
     });
   },
   cancel: (request_id: string) =>
     invoke("cancel_chat", { requestId: request_id }),
+  applyTopics: async (note: Note, topics: string[]) => {
+    if (desktop)
+      return invoke("apply_topics", {
+        id: note.id,
+        revision: note.revision ?? 0,
+        topics,
+      });
+    persist(
+      previewNotes().map((n) =>
+        n.id === note.id ? { ...n, topics, organized: true } : n,
+      ),
+    );
+  },
+  startup: () =>
+    desktop ? invoke<boolean>("startup_enabled") : Promise.resolve(false),
+  setStartup: (enabled: boolean) => invoke("set_startup", { enabled }),
+  hide: () => invoke("hide_window"),
   open: async (url: string) => {
     if (!/^https?:\/\//i.test(url)) return;
     if (desktop) await invoke("open_source", { url });

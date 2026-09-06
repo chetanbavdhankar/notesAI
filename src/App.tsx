@@ -28,6 +28,7 @@ import {
   RotateCw,
 } from "lucide-react";
 import { api, desktop } from "./api";
+import { OrganizeDialog } from "./Organization";
 import { useAppearance } from "./appearance";
 import {
   Markdown,
@@ -56,6 +57,9 @@ const iconFor = (kind: string, size = 17) =>
     <Globe size={size} />
   );
 export default function App() {
+  const [topic, setTopic] = useState("");
+  const [unorganized, setUnorganized] = useState(false);
+  const [organizing, setOrganizing] = useState<Note[] | null>(null);
   const [appearancePreview, setAppearancePreview] = useState<Appearance | null>(
     null,
   );
@@ -147,6 +151,8 @@ export default function App() {
   let filtered = notes.filter(
     (n) =>
       (filter === "all" || n.kind === filter) &&
+      (!topic || (n.topics ?? []).includes(topic)) &&
+      (!unorganized || !n.organized) &&
       (!tag || n.tags.includes(tag)) &&
       (!dateFilter || n.created_at.slice(0, 10) >= dateFilter) &&
       `${n.title} ${n.body} ${n.tags.join(" ")}`
@@ -155,6 +161,14 @@ export default function App() {
   );
   if (reverse) filtered = [...filtered].reverse();
   const tags = [...new Set(notes.flatMap((n) => n.tags))].sort();
+  const topics = [...new Set(notes.flatMap((n) => n.topics ?? []))].sort();
+  const chooseTopic = (name: string, pending = false) => {
+    setTopic(name);
+    setUnorganized(pending);
+    setFilter("all");
+    setTag("");
+    setHybridHits(null);
+  };
   const ask = async (text = question) => {
     if (!text.trim() || streaming) return;
     autoScroll.current = true;
@@ -171,20 +185,27 @@ export default function App() {
       { role: "assistant", content: "", sources: [] },
     ]);
     try {
-      await api.chat(text, history, id, (event) => {
-        if (event.request_id !== requestId.current) return;
-        setMessages((m) => {
-          const next = [...m];
-          const last = { ...next[next.length - 1] };
-          if (event.kind === "error")
-            last.error = event.text ?? "Generation failed";
-          if (event.kind === "status") last.status = event.text;
-          if (event.kind === "sources") last.sources = event.sources;
-          if (event.kind === "token") last.content += event.text ?? "";
-          next[next.length - 1] = last;
-          return next;
-        });
-      });
+      await api.chat(
+        text,
+        history,
+        id,
+        (event) => {
+          if (event.request_id !== requestId.current) return;
+          setMessages((m) => {
+            const next = [...m];
+            const last = { ...next[next.length - 1] };
+            if (event.kind === "error")
+              last.error = event.text ?? "Generation failed";
+            if (event.kind === "status") last.status = event.text;
+            if (event.kind === "sources") last.sources = event.sources;
+            if (event.kind === "token") last.content += event.text ?? "";
+            if (event.kind === "replace") last.content = event.text ?? "";
+            next[next.length - 1] = last;
+            return next;
+          });
+        },
+        topic,
+      );
     } catch (e) {
       setMessages((m) =>
         m.map((item, i) =>
@@ -200,7 +221,7 @@ export default function App() {
     setSearching(true);
     setError("");
     try {
-      setHybridHits(await api.search(query, settings.top_k));
+      setHybridHits(await api.search(query, settings.top_k, topic));
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -214,6 +235,13 @@ export default function App() {
   };
   return (
     <div className="app-shell">
+      {organizing && (
+        <OrganizeDialog
+          notes={organizing}
+          onClose={() => setOrganizing(null)}
+          onChanged={() => void refresh()}
+        />
+      )}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
@@ -242,8 +270,52 @@ export default function App() {
         <button className="capture-button" onClick={() => setCaptureOpen(true)}>
           <Plus size={18} /> New capture <kbd>Ctrl N</kbd>
         </button>
-        <div className="nav-section">
-          <span className="eyebrow">YOUR SPACE</span>
+        <div className="nav-section topic-nav">
+          <span className="eyebrow">TOPICS</span>
+          <button
+            className={`nav-item ${!topic && !unorganized ? "active" : ""}`}
+            onClick={() => chooseTopic("")}
+          >
+            <Library size={18} />
+            <span>All topics</span>
+            <small>{notes.length}</small>
+          </button>
+          <button
+            className={`nav-item ${unorganized ? "active" : ""}`}
+            onClick={() => chooseTopic("", true)}
+          >
+            <Tag size={18} />
+            <span>Unorganized</span>
+            <small>{notes.filter((n) => !n.organized).length}</small>
+          </button>
+          {topics.map((t) => (
+            <button
+              key={t}
+              className={`nav-item ${topic === t ? "active" : ""}`}
+              onClick={() => chooseTopic(t)}
+            >
+              <Tag size={16} />
+              <span>{t}</span>
+              <small>{notes.filter((n) => n.topics?.includes(t)).length}</small>
+            </button>
+          ))}
+          <button
+            className="nav-item"
+            onClick={() =>
+              setOrganizing(
+                notes.filter(
+                  (n) =>
+                    !n.organized && !["queued", "hydrating"].includes(n.status),
+                ),
+              )
+            }
+          >
+            <Sparkles size={18} />
+            <span>Organize</span>
+          </button>
+        </div>
+        <details className="nav-section">
+          <summary className="eyebrow">SOURCE TYPES</summary>
           {(
             [
               ["all", "All captures", Library],
@@ -270,7 +342,7 @@ export default function App() {
               </small>
             </button>
           ))}
-        </div>
+        </details>
         <div className="nav-section tags-nav">
           <span className="eyebrow">COLLECTION TAGS</span>
           {tags.length ? (
@@ -322,9 +394,12 @@ export default function App() {
           <div className="breadcrumb">
             Your space <ChevronRight size={14} />
             <strong>
-              {filter === "all"
-                ? "All captures"
-                : filter.charAt(0).toUpperCase() + filter.slice(1) + "s"}
+              {topic ||
+                (unorganized
+                  ? "Unorganized"
+                  : filter === "all"
+                    ? "All captures"
+                    : filter.charAt(0).toUpperCase() + filter.slice(1) + "s")}
             </strong>
           </div>
           <div className="topbar-right">
@@ -483,9 +558,11 @@ export default function App() {
                         .trim() || note.source_url}
                     </p>
                     <div className="card-tags">
-                      {note.tags.slice(0, 3).map((t) => (
-                        <span key={t}>{t}</span>
-                      ))}
+                      {[...(note.topics ?? []), ...note.tags]
+                        .slice(0, 3)
+                        .map((t, i) => (
+                          <span key={`${t}-${i}`}>{t}</span>
+                        ))}
                     </div>
                     <span className="card-footer">
                       {date(note.created_at)}
@@ -525,6 +602,8 @@ export default function App() {
                           setTag("");
                           setDateFilter("");
                           setFilter("all");
+                          setTopic("");
+                          setUnorganized(false);
                           setHybridHits(null);
                         } else setCaptureOpen(true);
                       }}
@@ -556,6 +635,14 @@ export default function App() {
                 </button>
               </div>
               <span className="panel-label">
+                {mode === "note" && active && (
+                  <button
+                    className="text-button"
+                    onClick={() => setOrganizing([active])}
+                  >
+                    Edit topics
+                  </button>
+                )}
                 {mode === "chat"
                   ? `${settings.top_k} passages · ${profile?.name ?? "No model"}`
                   : "YOUR SAVED CONTEXT"}
@@ -641,7 +728,10 @@ export default function App() {
                               : "No answer generated.")
                           }
                           sources={m.sources}
-                          onSource={setReference}
+                          onSource={(hit) => {
+                            setReference(hit);
+                            setActiveId(hit.note_id);
+                          }}
                         />
                         {m.error && (
                           <p className="error" role="alert">
@@ -676,6 +766,9 @@ export default function App() {
                     void ask();
                   }}
                 >
+                  <div className="chat-scope">
+                    Search scope: <strong>{topic || "All topics"}</strong>
+                  </div>
                   <div className="composer">
                     <textarea
                       aria-label="Ask your library"

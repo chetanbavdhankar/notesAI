@@ -1,4 +1,61 @@
 @import "tailwindcss";
+.sidebar {
+  overflow-y: auto;
+}
+.topic-nav {
+  flex-shrink: 0;
+}
+.nav-section summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.topic-nav .nav-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-tabs {
+  flex-wrap: wrap;
+}
+.organization-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.organization-card {
+  border: 1px solid var(--tone-200);
+  background: var(--tone-0);
+  border-radius: 10px;
+  padding: 16px;
+}
+.organization-card h3 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.organization-card p,
+.background-settings p {
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.topic-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.topic-options label,
+label.startup-toggle {
+  flex-direction: row;
+  align-items: center;
+  margin: 0;
+}
+.background-settings {
+  padding: 16px 0;
+}
+.chat-scope {
+  color: var(--tone-600);
+  font-size: 11px;
+  margin: 0 0 7px;
+}
 @theme {
   --font-sans: "Segoe UI", system-ui, sans-serif;
 }

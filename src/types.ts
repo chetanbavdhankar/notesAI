@@ -16,6 +16,9 @@ export interface Note {
   status: string;
 
   error: string | null;
+  topics?: string[];
+  organized?: boolean;
+  revision?: number;
 }
 
 export interface Profile {
@@ -46,6 +49,7 @@ export interface Settings {
   appearance: Appearance;
 
   backup: BackupConfig;
+  organizer_profile_id?: string;
 }
 
 export interface BackupConfig {
@@ -140,7 +144,7 @@ export interface Hit {
 export interface ChatEvent {
   request_id: string;
 
-  kind: "sources" | "token" | "done" | "error" | "status";
+  kind: "sources" | "token" | "replace" | "done" | "error" | "status";
 
   text?: string;
 

@@ -1,3 +1,4 @@
+mod background;
 mod backup;
 mod db;
 mod discovery;
@@ -5,6 +6,7 @@ mod drive;
 mod google_auth;
 mod ingest;
 mod llm;
+mod organize;
 mod streaming;
 use std::{
     collections::HashMap,
@@ -175,14 +177,74 @@ async fn backup_restore(
         None => Ok(None),
     }
 }
-async fn retrieve(state: Arc<AppState>, query: String, k: usize) -> anyhow::Result<Vec<db::Hit>> {
+#[tauri::command]
+fn startup_enabled() -> ApiResult<bool> {
+    background::enabled().map_err(error)
+}
+#[tauri::command]
+fn set_startup(enabled: bool) -> ApiResult<()> {
+    background::set_enabled(enabled).map_err(error)
+}
+#[tauri::command]
+fn hide_window(app: tauri::AppHandle) -> ApiResult<()> {
+    if let Some(w) = app.get_webview_window("main") {
+        w.hide().map_err(error)?;
+    }
+    Ok(())
+}
+#[tauri::command]
+async fn suggest_topics(
+    id: String,
+    state: State<'_, Arc<AppState>>,
+) -> ApiResult<organize::Suggestion> {
+    let settings = llm::load(&state.settings).map_err(error)?;
+    llm::validate(&settings).map_err(error)?;
+    let chosen = if settings.organizer_profile_id.is_empty() {
+        &settings.active_profile_id
+    } else {
+        &settings.organizer_profile_id
+    };
+    let profile = settings
+        .profiles
+        .iter()
+        .find(|p| &p.id == chosen)
+        .ok_or("Choose an organizer model in Settings")?;
+    organize::suggest(&state.db, profile, &id)
+        .await
+        .map_err(error)
+}
+#[tauri::command]
+fn apply_topics(
+    id: String,
+    revision: i64,
+    topics: Vec<String>,
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> ApiResult<()> {
+    organize::apply(&state.db, &id, revision, topics).map_err(error)?;
+    let _ = app.emit("notes-changed", ());
+    Ok(())
+}
+async fn retrieve(
+    state: Arc<AppState>,
+    query: String,
+    k: usize,
+    topic: Option<String>,
+) -> anyhow::Result<Vec<db::Hit>> {
     let path = state.db.clone();
     let q = query.clone();
-    let lex = tauri::async_runtime::spawn_blocking(move || db::lexical(&path, &q, k * 4));
+    let scope = topic.clone().filter(|s| !s.is_empty());
+    let lex = tauri::async_runtime::spawn_blocking(move || match scope {
+        Some(t) => db::scoped_lexical(&path, &q, k * 4, &t),
+        None => db::lexical(&path, &q, k * 4),
+    });
     let s = state.clone();
     let vec = tauri::async_runtime::spawn_blocking(move || {
         let embedding = s.embeddings.query(&query)?;
-        db::vector(&s.db, &embedding, k * 4)
+        match topic.filter(|t| !t.is_empty()) {
+            Some(t) => db::scoped_vector(&s.db, &embedding, k * 4, &t),
+            None => db::vector(&s.db, &embedding, k * 4),
+        }
     });
     let (lex, vec) = tokio::join!(lex, vec);
     let ranks = db::rrf(&[lex??, vec??], k);
@@ -193,9 +255,10 @@ async fn retrieve(state: Arc<AppState>, query: String, k: usize) -> anyhow::Resu
 async fn search(
     query: String,
     top_k: usize,
+    topic: Option<String>,
     state: State<'_, Arc<AppState>>,
 ) -> ApiResult<Vec<db::Hit>> {
-    retrieve(state.inner().clone(), query, top_k.clamp(3, 15))
+    retrieve(state.inner().clone(), query, top_k.clamp(3, 15), topic)
         .await
         .map_err(error)
 }
@@ -209,6 +272,7 @@ fn cancel_chat(request_id: String, state: State<'_, Arc<AppState>>) -> ApiResult
 #[tauri::command]
 async fn chat(
     question: String,
+    topic: Option<String>,
     history: Vec<llm::Message>,
     request_id: String,
     on_event: Channel<llm::ChatEvent>,
@@ -227,12 +291,28 @@ async fn chat(
         let settings=llm::load(&s.settings)?;llm::validate(&settings)?;
         let profile=settings.profiles.iter().find(|p|p.id==settings.active_profile_id).ok_or_else(||anyhow::anyhow!("Choose a model profile"))?;
         anyhow::ensure!(!profile.model_name.trim().is_empty(),"Choose a model in Settings");
-        let hits=retrieve(s.clone(),question.clone(),settings.top_k).await?;
+        let hits=retrieve(s.clone(),question.clone(),settings.top_k,topic).await?;
         anyhow::ensure!(!cancel.load(Ordering::Relaxed),"Generation stopped");
         let (messages,sources,output)=llm::assemble(profile,&question,&history,hits)?;
-        let count=sources.len();llm::emit(&on_event,&request_id,"sources",None,Some(sources))?;
+        let count=sources.len();llm::emit(&on_event,&request_id,"sources",None,Some(sources.clone()))?;
         if count==0{llm::emit(&on_event,&request_id,"token",Some("I couldn't find indexed sources for that question. Capture relevant material, wait for indexing, and try again.".into()),None)?;llm::emit(&on_event,&request_id,"done",None,None)?;return Ok(())}
-        llm::stream(&s.client,profile,messages,output,&request_id,&on_event,cancel,count).await
+        let result=llm::stream(&s.client,profile,messages.clone(),output,&request_id,&on_event,cancel.clone(),count).await;
+        if let Err(ref e)=result {
+            if e.to_string().contains("citation") {
+                llm::emit(&on_event,&request_id,"status",Some("Checking note references…".into()),None)?;
+                let mut repair=messages;
+                repair.push(serde_json::json!({"role":"user","content":"Write a fresh concise answer. EVERY paragraph and every list item must end with its correct source citation [^N]. Use only the numbered sources provided. Do not write headings, footnote definitions, links, or code blocks. If a claim cannot be supported, omit it."}));
+                let pending=llm::complete(profile,repair,output);tokio::pin!(pending);
+                let repaired=loop{anyhow::ensure!(!cancel.load(Ordering::Relaxed),"Generation stopped");tokio::select!{value=&mut pending=>break value,_=tokio::time::sleep(std::time::Duration::from_millis(100))=>{}}};
+                let answer=match repaired {Ok(text) if llm::validate_citations(&text,count).is_ok()=>text,_=>{
+                    let mut text=String::from("The model could not produce a reliably cited answer. Here are the retrieved passages to review:\n\n");
+                    for (i,source) in sources.iter().enumerate(){let quote=source.text.chars().take(450).collect::<String>().replace('[',"\\[").replace(']',"\\]").replace('\n'," ");text.push_str(&format!("> {}{} [^{}]\n\n",quote,if source.text.chars().count()>450{"…"}else{""},i+1));}text
+                }};
+                llm::emit(&on_event,&request_id,"replace",Some(answer),None)?;
+                llm::emit(&on_event,&request_id,"done",None,None)?;return Ok(())
+            }
+        }
+        result
     }.await;
     state
         .cancellations
@@ -295,7 +375,10 @@ async fn worker(app: tauri::AppHandle, state: Arc<AppState>) {
 }
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if args.iter().any(|arg| arg == "--background") {
+                return;
+            }
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.set_focus();
@@ -330,6 +413,11 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            if !std::env::args().any(|arg| arg == "--background") {
+                if let Some(w) = app.get_webview_window("main") {
+                    w.show()?;
+                }
+            }
             let dir = std::env::var_os("NOTESAI_DATA_DIR")
                 .map(PathBuf::from)
                 .unwrap_or(app.path().app_data_dir()?);
@@ -399,6 +487,11 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            startup_enabled,
+            set_startup,
+            hide_window,
+            suggest_topics,
+            apply_topics,
             backup_status,
             google_connect,
             google_disconnect,

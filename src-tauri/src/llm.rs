@@ -33,6 +33,8 @@ pub struct Settings {
     pub appearance: Appearance,
     #[serde(default)]
     pub backup: crate::backup::Config,
+    #[serde(default)]
+    pub organizer_profile_id: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -67,6 +69,7 @@ impl Default for Settings {
             top_k: 6,
             appearance: Appearance::default(),
             backup: crate::backup::Config::default(),
+            organizer_profile_id: String::new(),
         }
     }
 }
@@ -78,6 +81,14 @@ pub fn load(path: &Path) -> Result<Settings> {
     }
 }
 pub fn validate(settings: &Settings) -> Result<()> {
+    anyhow::ensure!(
+        settings.organizer_profile_id.is_empty()
+            || settings
+                .profiles
+                .iter()
+                .any(|p| p.id == settings.organizer_profile_id),
+        "Choose an existing organizer model profile"
+    );
     anyhow::ensure!(
         (5..=1440).contains(&settings.backup.interval_minutes),
         "Backup interval must be 5–1440 minutes"
@@ -268,6 +279,80 @@ pub fn assemble(
     messages.push(json!({"role":"user","content":question}));
     Ok((messages, selected, output))
 }
+pub async fn complete(
+    profile: &Profile,
+    messages: Vec<Value>,
+    max_tokens: usize,
+) -> Result<String> {
+    complete_structured(profile, messages, max_tokens, None).await
+}
+pub async fn complete_structured(
+    profile: &Profile,
+    messages: Vec<Value>,
+    max_tokens: usize,
+    schema: Option<Value>,
+) -> Result<String> {
+    let native = crate::discovery::is_ollama(profile);
+    let target = if native {
+        format!(
+            "{}/api/chat",
+            crate::discovery::ollama_root(&profile.base_url)?
+        )
+    } else {
+        endpoint(profile, "chat/completions")?
+    };
+    let mut payload = if native {
+        json!({"model":profile.model_name,"messages":messages,"stream":false,"think":if profile.model_name.to_lowercase().contains("gpt-oss"){json!("low")}else{json!(false)},"options":{"temperature":0,"num_predict":max_tokens,"num_ctx":profile.context_window_limit}})
+    } else {
+        json!({"model":profile.model_name,"messages":messages,"stream":false,"temperature":0,"max_tokens":max_tokens})
+    };
+    if native {
+        if let Some(schema) = schema {
+            payload["format"] = schema;
+        }
+    }
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(180));
+    if matches!(
+        url::Url::parse(&target)?.host_str(),
+        Some("127.0.0.1" | "localhost" | "[::1]")
+    ) {
+        builder = builder.no_proxy();
+    }
+    let mut request = builder.build()?.post(target).json(&payload);
+    if !profile.api_key.is_empty() {
+        request = request.bearer_auth(&profile.api_key);
+    }
+    let response = request.send().await?;
+    anyhow::ensure!(
+        response.status().is_success(),
+        "Model request returned HTTP {}",
+        response.status()
+    );
+    let data: Value = response.json().await?;
+    let reason = if native {
+        &data["done_reason"]
+    } else {
+        &data["choices"][0]["finish_reason"]
+    };
+    anyhow::ensure!(
+        reason.as_str() != Some("length"),
+        "The model reached its output limit. Choose a larger context or another model."
+    );
+    let text = if native {
+        data["message"]["content"].as_str()
+    } else {
+        data["choices"][0]["message"]["content"].as_str()
+    }
+    .context("Model returned no text")?;
+    anyhow::ensure!(
+        !text.trim().is_empty(),
+        "The model returned an empty answer"
+    );
+    Ok(text.into())
+}
+
 pub async fn stream(
     client: &reqwest::Client,
     profile: &Profile,
@@ -358,7 +443,11 @@ pub async fn stream(
         }
     }
     decoder.validate_completion()?;
-    let full = decoder.text;
+    validate_citations(&decoder.text, source_count)?;
+    emit(channel, id, "done", None, None)?;
+    Ok(())
+}
+pub fn validate_citations(full: &str, source_count: usize) -> Result<()> {
     let re = regex::Regex::new(r"\[\^(\d+)\]")?;
     let invalid = re.captures_iter(&full).any(|c| {
         c[1].parse::<usize>()
@@ -373,12 +462,48 @@ pub async fn stream(
         source_count == 0 || re.is_match(&full),
         "The model omitted source citations; this answer is not verified"
     );
-    emit(channel, id, "done", None, None)?;
+    // Require a source in every substantive paragraph/list item, not just somewhere in the answer.
+    let list = regex::Regex::new(r"^\s*(?:[-*+]|\d+[.)])\s+")?;
+    let definition = regex::Regex::new(r"(?m)^\s*\[\^\d+\]:")?;
+    anyhow::ensure!(
+        !definition.is_match(full),
+        "The model used footnote definitions instead of inline citations"
+    );
+    for paragraph in full.split("\n\n") {
+        if paragraph.trim().is_empty()
+            || paragraph
+                .lines()
+                .all(|line| line.trim().is_empty() || line.trim().starts_with('#'))
+        {
+            continue;
+        }
+        anyhow::ensure!(
+            source_count == 0 || re.is_match(paragraph),
+            "The model omitted paragraph citations; this answer is not verified"
+        );
+        for line in paragraph.lines().filter(|line| list.is_match(line)) {
+            anyhow::ensure!(
+                re.is_match(line),
+                "The model omitted list citations; this answer is not verified"
+            );
+        }
+    }
     Ok(())
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn citations_cover_paragraphs_and_numbered_items() {
+        assert!(validate_citations("First fact. [^1]\n\nUncited fact.", 2).is_err());
+        assert!(validate_citations("1. First fact. [^1]\n2. Uncited fact.", 2).is_err());
+        assert!(validate_citations("# Heading\nUncited fact.\n\nCited fact. [^1]", 2).is_err());
+        assert!(validate_citations("Fact.\n\n[^1]: source", 2).is_err());
+        assert!(validate_citations("Fact. [^9]", 2).is_err());
+        assert!(
+            validate_citations("# Heading\n\n1. First fact. [^1]\n2. Second fact. [^2]", 2).is_ok()
+        );
+    }
     #[test]
     fn endpoints_do_not_duplicate_v1() {
         let p = Settings::default().profiles.remove(0);
