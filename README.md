@@ -4,6 +4,8 @@ A local-first Windows desktop app for saving context and asking questions with s
 
 Planning to build on a MacBook? Follow the repository-specific [macOS port plan](docs/MACOS_PORT_PLAN.md). It starts with an Apple Silicon dependency and unsigned-app gate, then covers menu-bar capture, Keychain, cross-platform backups, signing, notarization, and release automation.
 
+Smartphone work is split into realistic platform plans: [Android](docs/ANDROID_PORT_PLAN.md) and [iOS](docs/IOS_PORT_PLAN.md). Both define low-friction capture surfaces, mobile native-dependency gates, lifecycle-safe processing, and the Google Drive synchronization work required for one library across devices.
+
 ## Download for Windows
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
