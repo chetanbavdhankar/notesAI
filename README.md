@@ -6,7 +6,7 @@ A local-first Windows desktop app for saving context and asking questions with s
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
 
-- `NotesAI_0.3.2_x64-setup.exe` — recommended Windows installer
+- `NotesAI_0.3.3_x64-setup.exe` — recommended Windows installer
 - `notesai.exe` — standalone application executable
 
 The repository tracks all application source code, tests, configuration, lockfiles, icons, and third-party license notices. Generated dependency folders, caches, test screenshots, and compiler output are excluded; they are reproducible from the tracked source and lockfiles.
@@ -20,7 +20,7 @@ npm.cmd ci
 npm.cmd run desktop:build
 ```
 
-Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.3.2_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
+Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.3.3_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
 
 ```powershell
 npm.cmd run dev             # Browser interface preview, without native AI/ingestion
@@ -136,6 +136,10 @@ Live remote providers, OS hotkey capture/toast delivery, and the breadth of publ
 - Primary implementation references: [Tauri global shortcuts](https://v2.tauri.app/plugin/global-shortcut/), [sqlite-vec Rust example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-rust/demo.rs), [FastEmbed](https://docs.rs/crate/fastembed/4.9.1), [bundled yt-dlp release](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19).
 
 The yt-dlp executable's upstream and third-party licenses are included in `vendor/` and installed with the app.
+
+## Version 0.3.3
+
+The icon now uses a full-bleed, sharp-edged square canvas with one large bordered note and sparkle. Removing transparent margins and the extra stacked card makes the mark larger and clearer in the app, on the desktop, and at small Windows icon sizes. The in-app version continues to adapt to the selected theme.
 
 ## Version 0.3.2
 

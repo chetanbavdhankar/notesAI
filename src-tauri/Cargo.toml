@@ -1,6 +1,6 @@
 [package]
 name = "notesai"
-version = "0.3.2"
+version = "0.3.3"
 description = "Local knowledge capture and grounded retrieval"
 edition = "2021"
 

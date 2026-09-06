@@ -134,18 +134,11 @@ a {
 }
 .brand-tile {
   fill: var(--tone-600);
-  stroke: var(--tone-200);
-  stroke-width: 3;
 }
-.brand-page-back {
+.brand-page {
   fill: var(--tone-300);
   stroke: var(--tone-50);
-  stroke-width: 3;
-}
-.brand-page-front {
-  fill: var(--tone-500);
-  stroke: var(--tone-50);
-  stroke-width: 3;
+  stroke-width: 4;
 }
 .brand-lines {
   fill: none;

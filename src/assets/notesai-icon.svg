@@ -1,27 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="tile" x1="180" y1="100" x2="850" y2="930" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#52697c"/>
-      <stop offset="1" stop-color="#34495b"/>
+    <linearGradient id="tile" x1="100" y1="70" x2="930" y2="970" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#587083"/>
+      <stop offset=".52" stop-color="#445c6e"/>
+      <stop offset="1" stop-color="#344b5b"/>
     </linearGradient>
-    <linearGradient id="page" x1="350" y1="300" x2="780" y2="850" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#718696"/>
-      <stop offset="1" stop-color="#526a7d"/>
+    <linearGradient id="paper" x1="300" y1="190" x2="720" y2="850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#91a495"/>
+      <stop offset="1" stop-color="#748b7d"/>
     </linearGradient>
-    <linearGradient id="sage" x1="270" y1="250" x2="680" y2="760" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#91a294"/>
-      <stop offset="1" stop-color="#708579"/>
-    </linearGradient>
-    <linearGradient id="ivory" x1="300" y1="210" x2="740" y2="900" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f7f1e7"/>
-      <stop offset="1" stop-color="#ded5c6"/>
+    <linearGradient id="ivory" x1="280" y1="170" x2="760" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#faf5eb"/>
+      <stop offset="1" stop-color="#ded4c4"/>
     </linearGradient>
   </defs>
-  <rect x="42" y="42" width="940" height="940" rx="215" fill="url(#tile)" stroke="url(#ivory)" stroke-width="30"/>
-  <rect x="68" y="68" width="888" height="888" rx="190" fill="none" stroke="#8192a0" stroke-width="8" opacity=".9"/>
-  <path d="M110 250C144 145 222 102 330 88H690C828 100 908 174 938 302" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity=".13"/>
-  <rect x="244" y="222" width="474" height="570" rx="112" fill="url(#sage)" stroke="url(#ivory)" stroke-width="36"/>
-  <rect x="340" y="318" width="478" height="570" rx="112" fill="url(#page)" stroke="url(#ivory)" stroke-width="36"/>
-  <path d="M458 482H680M458 566H680" fill="none" stroke="#f4ede1" stroke-width="34" stroke-linecap="round"/>
-  <path d="M644 650C659 701 685 727 736 742C685 757 659 783 644 834C629 783 603 757 552 742C603 727 629 701 644 650Z" fill="url(#ivory)" stroke="#f9f4ec" stroke-width="8" stroke-linejoin="round"/>
+  <path fill="url(#tile)" d="M0 0h1024v1024H0z"/>
+  <path fill="#ffffff" opacity=".07" d="M0 0h1024v54H0z"/>
+  <path fill="#1f3442" opacity=".18" d="M0 970h1024v54H0z"/>
+  <rect x="218" y="140" width="588" height="744" rx="92" fill="url(#paper)" stroke="url(#ivory)" stroke-width="54"/>
+  <path d="M354 340h316M354 446h316" fill="none" stroke="#f5eee2" stroke-width="43" stroke-linecap="round"/>
+  <path d="M634 556c18 63 51 96 114 114-63 18-96 51-114 114-18-63-51-96-114-114 63-18 96-51 114-114Z" fill="url(#ivory)"/>
 </svg>
