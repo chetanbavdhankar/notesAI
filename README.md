@@ -6,6 +6,8 @@ Planning to build on a MacBook? Follow the repository-specific [macOS port plan]
 
 Smartphone work is split into realistic platform plans: [Android](docs/ANDROID_PORT_PLAN.md) and [iOS](docs/IOS_PORT_PLAN.md). Both define low-friction capture surfaces, mobile native-dependency gates, lifecycle-safe processing, and the Google Drive synchronization work required for one library across devices.
 
+For a shared library across Windows, macOS, Android, and iOS, follow the [cross-platform shared library plan](docs/CROSS_PLATFORM_SYNC_PLAN.md). It specifies bidirectional Google Drive synchronization, user-controlled cloud deletion, conflicts, encryption, attachment storage, migration from backups, and staged validation gates.
+
 ## Download for Windows
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
