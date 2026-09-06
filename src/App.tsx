@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import appIcon from "./assets/notesai-icon.png";
 import {
   ArrowDownUp,
   ArrowUp,
@@ -9,7 +10,6 @@ import {
   Clipboard,
   FileText,
   Globe,
-  Layers3,
   Library,
   MessageSquare,
   MoreHorizontal,
@@ -218,7 +218,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <Layers3 size={21} />
+            <img src={appIcon} alt="" />
           </div>
           <span>
             notes<span className="brand-ai">ai</span>

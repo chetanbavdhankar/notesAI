@@ -368,11 +368,11 @@ pub fn run() {
             let show = MenuItem::with_id(app, "show", "Open NotesAI", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit NotesAI", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
-            let icon =
-                tauri::image::Image::new_owned(vec![94, 121, 97, 255].repeat(32 * 32), 32, 32);
-            tauri::tray::TrayIconBuilder::new()
-                .icon(icon)
-                .tooltip("NotesAI — capture is ready")
+            let mut tray = tauri::tray::TrayIconBuilder::new();
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.tooltip("NotesAI — capture is ready")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {

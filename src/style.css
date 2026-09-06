@@ -124,11 +124,14 @@ a {
 .brand-mark {
   display: grid;
   place-items: center;
-  background: var(--tone-600);
-  color: var(--tone-50);
-  width: 31px;
-  height: 34px;
-  border-radius: 9px 9px 9px 2px;
+  width: 36px;
+  height: 36px;
+}
+.brand-mark img {
+  display: block;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 .brand-ai {
   font-weight: 400;
