@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import appIcon from "./assets/notesai-icon.png";
 import {
   ArrowDownUp,
   ArrowUp,
@@ -218,7 +217,37 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <img src={appIcon} alt="" />
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <rect
+                className="brand-tile"
+                x="2"
+                y="2"
+                width="60"
+                height="60"
+                rx="14"
+              />
+              <rect
+                className="brand-page-back"
+                x="14"
+                y="13"
+                width="31"
+                height="37"
+                rx="7"
+              />
+              <rect
+                className="brand-page-front"
+                x="21"
+                y="20"
+                width="31"
+                height="38"
+                rx="7"
+              />
+              <path className="brand-lines" d="M29 31h14M29 37h14" />
+              <path
+                className="brand-spark"
+                d="M41 41c1.2 4 3.2 6 7.2 7.2-4 1.2-6 3.2-7.2 7.2-1.2-4-3.2-6-7.2-7.2 4-1.2 6-3.2 7.2-7.2Z"
+              />
+            </svg>
           </div>
           <span>
             notes<span className="brand-ai">ai</span>

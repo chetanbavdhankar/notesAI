@@ -6,7 +6,7 @@ A local-first Windows desktop app for saving context and asking questions with s
 
 Download the current Windows build from [GitHub Releases](https://github.com/chetanbavdhankar/notesAI/releases/latest):
 
-- `NotesAI_0.3.1_x64-setup.exe` — recommended Windows installer
+- `NotesAI_0.3.2_x64-setup.exe` — recommended Windows installer
 - `notesai.exe` — standalone application executable
 
 The repository tracks all application source code, tests, configuration, lockfiles, icons, and third-party license notices. Generated dependency folders, caches, test screenshots, and compiler output are excluded; they are reproducible from the tracked source and lockfiles.
@@ -20,7 +20,7 @@ npm.cmd ci
 npm.cmd run desktop:build
 ```
 
-Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.3.1_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
+Before building, install Node.js, Rust's MSVC toolchain, Visual Studio C++ Build Tools with a Windows SDK, and WebView2. The launcher also detects an optional local Rust toolchain under `.tools`; toolchains and build outputs are not included in this repository. The generated installer is `src-tauri/target/release/bundle/nsis/NotesAI_0.3.2_x64-setup.exe`. For development, use `npm.cmd run desktop`. The Windows installer handles WebView2 installation where needed.
 
 ```powershell
 npm.cmd run dev             # Browser interface preview, without native AI/ingestion
@@ -137,9 +137,13 @@ Live remote providers, OS hotkey capture/toast delivery, and the breadth of publ
 
 The yt-dlp executable's upstream and third-party licenses are included in `vendor/` and installed with the app.
 
+## Version 0.3.2
+
+NotesAI now has a calm matte layered-notes and AI-sparkle icon with a rigid rounded-square frame. The operating-system artwork appears in the Windows executable, shortcuts, installer, window chrome, and system tray, with platform-specific sizes generated from the vector source. The in-app mark uses the same geometry and adapts to the theme selected in Settings.
+
 ## Version 0.3.1
 
-NotesAI now has a distinctive layered-notes and AI-sparkle icon. The same artwork appears in the app, Windows executable, shortcuts, installer, window chrome, and system tray, with platform-specific icon sizes generated from the high-resolution source.
+Introduced custom NotesAI branding and replaced the original solid-color tray placeholder.
 
 ## Version 0.3.0
 

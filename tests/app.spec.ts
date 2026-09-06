@@ -51,12 +51,19 @@ test("appearance previews, cancels, persists, and follows system changes", async
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
+  const sageLogoFill = await page
+    .locator(".brand-tile")
+    .evaluate((element) => getComputedStyle(element).fill);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   await page.getByRole("button", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Ocean palette" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).toHaveAttribute("data-palette", "blue");
+  const oceanLogoFill = await page
+    .locator(".brand-tile")
+    .evaluate((element) => getComputedStyle(element).fill);
+  expect(oceanLogoFill).not.toBe(sageLogoFill);
   await page.screenshot({
     path: "artifacts/settings-dark-ocean.png",
     animations: "disabled",

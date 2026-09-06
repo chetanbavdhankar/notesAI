@@ -127,11 +127,34 @@ a {
   width: 36px;
   height: 36px;
 }
-.brand-mark img {
+.brand-mark svg {
   display: block;
   width: 36px;
   height: 36px;
-  object-fit: contain;
+}
+.brand-tile {
+  fill: var(--tone-600);
+  stroke: var(--tone-200);
+  stroke-width: 3;
+}
+.brand-page-back {
+  fill: var(--tone-300);
+  stroke: var(--tone-50);
+  stroke-width: 3;
+}
+.brand-page-front {
+  fill: var(--tone-500);
+  stroke: var(--tone-50);
+  stroke-width: 3;
+}
+.brand-lines {
+  fill: none;
+  stroke: var(--tone-50);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.brand-spark {
+  fill: var(--tone-50);
 }
 .brand-ai {
   font-weight: 400;
